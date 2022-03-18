@@ -1,0 +1,239 @@
+<!doctype html> 
+<html lang="en"> 
+<head> 
+    <meta charset="UTF-8" />
+    <title>Applovin Test</title>
+    <script src="//cdn.jsdelivr.net/npm/phaser@3.11.0/dist/phaser.js"></script>
+    <style type="text/css">
+        body {
+            margin: 0;
+        }
+    </style>
+</head>
+<body>
+
+<script type="text/javascript">
+
+    var config = {
+        type: Phaser.AUTO,
+        width: 900,
+        height: 800,
+        physics: {
+            default: 'arcade',
+            arcade: {
+                gravity: { y: 300 },
+                debug: false
+            }
+        },
+        scene: {
+            preload: preload,
+            create: create,
+            update: update
+        }
+    };
+    var game = new Phaser.Game(config);
+    var score = 0;
+    var scoreText;
+
+    function preload ()
+    {
+        this.load.image('hexRed', 'assets/hexRed1.png');
+        this.load.image('hexBlue', 'assets/hexBlue1.png');
+        this.load.image('hexYellow', 'assets/hexYellow1.png');
+        this.load.image('hexGreen', 'assets/hexGreen.png');
+        this.load.image('hexPink', 'assets/hexPink1.png');
+        this.load.image('selected','assets/highlight.png');
+    }
+
+    function create ()
+    {
+        var dotColors = ['hexRed','hexBlue','hexYellow','hexGreen','hexPink'];
+        var grid = {};
+        var toPop = [];
+        this.selectColor = '';
+        // these for loops creates the initial grid of randomly spawned hex's
+        for(x = 0; x < 6; x ++){
+            grid[x]=[];
+            for(y = 0; y < 6; y++){
+                //if y is even offset will be 0, otherwise offset will be 60 if odd, this to account
+                //for a hexagonal grid pattern
+                var offset = y % 2 * 60;
+                var setX = 135 + x*120 + offset;
+                var setY = 100 + y*110;
+                var color = Phaser.Math.Between(0,4);
+                var dot = this.add.image(setX,setY,dotColors[color]).setScale(.3);
+                dot.selected = this.add.image(setX+2.5,setY-5,'selected').setScale(.3);
+                dot.selected.visible = false;
+                dot.setData('color',dotColors[color]);
+                dot.setData('x',x);
+                dot.setData('y',y);
+                dot.setInteractive();
+                this.input.setDraggable(dot);
+                //these lines set my grid at x,y coords equal to the dot at those coords, for tracking 
+                //and updating the board purposes
+                grid[[x,y]] = dot;
+                grid[[x,y]].locationx = setX;
+                grid[[x,y]].locationy = setY;
+                grid[[x,y]].selectlocationx = setX+2.5;
+                grid[[x,y]].selectlocationy = setY-5;
+            }
+        }
+        this.input.dragDistanceThreshold = 16;
+        console.log(grid);
+
+        //while dragging, checks if hexagon is the same color and next to the other selected hex's
+        this.input.on('gameobjectover', function(pointer,gameObject){
+            console.log(toPop.length);
+            if(pointer.isDown && gameObject.selected.visible == false){
+                if(this.selectColor == gameObject.getData('color'))
+                {
+                    for (let i = 0; i < toPop.length; i++){
+                        if(next(gameObject,toPop[i].getData('x'), toPop[i].getData('y')) && !toPop.includes(gameObject)){
+                            toPop.push(gameObject);
+                            gameObject.selected.visible = true;
+                        }
+                    }
+                }
+            }
+       });
+       //when the player starts dragging mouse, selects the initial hex
+       this.input.on('dragstart', function(pointer,gameObject){
+            console.log('howdy start');
+            this.selectColor = gameObject.getData('color');
+            toPop.push(gameObject);
+            gameObject.selected.visible = true;
+       });
+
+       //when the player release from the drag, checks if at least 3 dots are selected, if so deletes them
+       //and adds them to the score
+       this.input.on('dragend', function(pointer){
+            console.log('drag over...');
+            if(toPop.length >= 3)
+            {
+                score += toPop.length;
+                updateScore();
+                console.log('deleting');
+                for (let i = 0; i < toPop.length; i++){
+                    toPop[i].selected.destroy();
+                    toPop[i].destroy();
+                }
+            }
+            deselect(toPop);
+            console.log(grid);
+            updateBoard(grid);
+
+            //after the selected dots have been deleted, and the above dots have been moved down into the gaps
+            //fills in the gaps in the board with new dots
+            for(let x = 0; x < 6; x ++){
+                for(let y = 0; y < 6; y++){
+                    if(grid[[x,y]].active == false)
+                    {
+                        grid[[x,y]].destroy();
+                        var offset = y % 2 * 60;
+                        var setX = 135 + x*120 + offset;
+                        var setY = 100 + y*110;
+                        var color = Phaser.Math.Between(0,4);
+                        var dot = this.add.image(setX,setY,dotColors[color]).setScale(.3);
+                        dot.selected = this.add.image(setX+2.5,setY-5,'selected').setScale(.3);
+                        dot.selected.visible = false;
+                        dot.setData('color',dotColors[color]);
+                        dot.setData('x',x);
+                        dot.setData('y',y);
+                        dot.setInteractive();
+                        this.input.setDraggable(dot);
+                        grid[[x,y]] = dot;
+                        grid[[x,y]].locationx = setX;
+                        grid[[x,y]].locationy = setY;
+                        grid[[x,y]].selectlocationx = setX+2.5;
+                        grid[[x,y]].selectlocationy = setY-5;
+                    }
+                }
+            }
+       },this);
+       //sets the initial score text
+       scoreText = this.add.text(16, 16, 'Score: 0', { fontSize: '32px', fill: '#fff' });
+    }
+
+    //function to deselect selected hex's, used when popping and deselecting after not popping
+    function deselect (toPop)
+    {
+        for(let i = 0; i < toPop.length; i ++){
+            toPop[i].selected.visible = false;
+        }
+        toPop.length = 0;
+    }
+
+    //function that checks if the game object is next to the coords sent to this function
+    //returns true if it is next to sent coords, false otherwise
+    function next (gameObject, x,y)
+    {
+        if(gameObject.getData('y') % 2 == 1){
+            if(gameObject.getData('x') == x + 1)
+            {
+                return gameObject.getData('y') == y;
+            }
+            else
+            {
+                return (gameObject.getData('x') <= x + 1
+                    && gameObject.getData('x') >= x - 1
+                    && gameObject.getData('y') <= y + 1
+                    && gameObject.getData('y') >= y - 1);
+            }
+        }
+        else{
+            if(gameObject.getData('x') == x - 1)
+            {
+                return gameObject.getData('y') == y;
+            }
+            else
+            {
+                return (gameObject.getData('x') <= x + 1
+                    && gameObject.getData('x') >= x - 1
+                    && gameObject.getData('y') <= y + 1
+                    && gameObject.getData('y') >= y - 1);
+            }
+        }
+    }
+
+    //function that updates the board after popping hex's, moves hex's above empty spaces into the gaps below
+    //works by looping through the grid, finding gaps, then moving all dots above down into them
+    function updateBoard(grid)
+    {
+        for(let x = 0; x < 6; x ++){
+            for(let y = 5; y > 0; y--){
+                let z = 1;
+                if(grid[[x,y-1]] != null && grid[[x,y]].active == false)
+                {
+                    while(y-z >= 0){ 
+                        if(grid[[x,y-z]] != null){
+                            grid[[x,y-z]].x = grid[[x,y-z+1]].locationx;
+                            grid[[x,y-z]].y = grid[[x,y-z+1]].locationy;
+                            grid[[x,y-z]].selected.x = grid[[x,y-z+1]].selectlocationx;
+                            grid[[x,y-z]].selected.y = grid[[x,y-z+1]].selectlocationy;  
+                            grid[[x,y-z]].setData('x',x);
+                            grid[[x,y-z]].setData('y',y-z+1);
+                            grid[[x,y-z+1]] = grid[[x,y-z]];
+                            grid[[x,y-z]].active = false;
+                        }
+                        z++;
+                    }
+                }
+            }
+        }
+    }
+    //updates score text
+    function updateScore ()
+    {
+        scoreText.setText('Score: ' + score);
+    }
+    
+    function update ()
+    {
+        
+    }
+
+
+</script>
+
+</body>
+</html>
